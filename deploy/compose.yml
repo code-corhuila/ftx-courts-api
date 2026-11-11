@@ -1,0 +1,28 @@
+# ftx-courts-api container (Annex J.7).
+#
+# This repository does NOT define a database: the single PostgreSQL instance lives in
+# ftx-infra-postgres, which includes this file:
+#
+#   include:
+#     - path: ../ftx-courts-api/deploy/compose.yml
+#
+# Operation, from ftx-infra-postgres (the instance must be up and ftx-courts-db migrated first):
+#   docker compose --env-file env/dev.env up -d --build --wait ftx-courts-api
+services:
+  ftx-courts-api:
+    build: ..                               # this repository's Dockerfile
+    image: ftx-courts-api:local
+    restart: unless-stopped
+    environment:
+      # "postgres" is the service name of the single instance in the platform network.
+      COURTS_DB_URL: jdbc:postgresql://postgres:5432/${PG_DATABASE:?set PG_DATABASE in the env file of ftx-infra-postgres}
+      COURTS_DB_USER: courts_app
+      COURTS_DB_PASSWORD: ${COURTS_APP_PASSWORD:?set COURTS_APP_PASSWORD in the env file of ftx-infra-postgres}
+    ports:
+      - "${COURTS_API_PORT:-8082}:8082"
+    networks: [platform]
+
+networks:
+  platform:
+    name: platform
+    external: true
