@@ -27,7 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @WebMvcTest(controllers = {CourtController.class, AdminCourtController.class})
-@Import({ApiExceptionHandler.class, CorrelationIdFilter.class, AdministratorInterceptor.class, WebConfiguration.class})
+@Import({ApiExceptionHandler.class, CorrelationIdFilter.class, AdministratorInterceptor.class, WebConfiguration.class,
+        TestVerifierConfiguration.class})
 class AdminCourtControllerTest {
 
     static final String URL = "/api/v1/admin/courts/" + CourtControllerTest.COURT_1;
@@ -37,9 +38,16 @@ class AdminCourtControllerTest {
     @MockitoBean GetCourt getCourt;
     @MockitoBean UpdateCourt updateCourt;
 
+    static final String ADMIN_ID = "6f1c2b7e-0000-4000-8000-000000000007";
+
     static MockHttpServletRequestBuilder asAdministrator(String body) {
         return patch(URL).contentType(MediaType.APPLICATION_JSON).content(body)
-                .header("X-User-Id", "admin-7").header("X-User-Role", "ADMINISTRATOR");
+                .header("Authorization", "Bearer " + TestTokens.administrator(ADMIN_ID));
+    }
+
+    static MockHttpServletRequestBuilder withToken(String token) {
+        return patch(URL).contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"INACTIVE\"}")
+                .header("Authorization", "Bearer " + token);
     }
 
     @Test
@@ -53,7 +61,7 @@ class AdminCourtControllerTest {
 
         ArgumentCaptor<UpdateCourtCommand> sent = ArgumentCaptor.forClass(UpdateCourtCommand.class);
         verify(updateCourt).updateCourt(sent.capture());
-        assertThat(sent.getValue().administratorId()).isEqualTo("admin-7");
+        assertThat(sent.getValue().administratorId()).isEqualTo(ADMIN_ID);
         assertThat(sent.getValue().hourlyPrice()).get().extracting(m -> m.amount()).isEqualTo(70000L);
         assertThat(sent.getValue().status()).contains(CourtStatus.UNDER_MAINTENANCE);
         assertThat(sent.getValue().name()).isEmpty();
@@ -62,8 +70,7 @@ class AdminCourtControllerTest {
     // M1: same request, two identities. Only the administrator gets through.
     @Test
     void anotherRoleIsForbiddenAndNothingChanges() throws Exception {
-        mvc.perform(patch(URL).contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"INACTIVE\"}")
-                        .header("X-User-Id", "user-2").header("X-User-Role", "CUSTOMER"))
+        mvc.perform(withToken(TestTokens.withRole("user-2", "CUSTOMER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("FORBIDDEN"));
         verify(updateCourt, never()).updateCourt(any());
@@ -74,8 +81,37 @@ class AdminCourtControllerTest {
         mvc.perform(patch(URL).contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"INACTIVE\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("UNAUTHORIZED"));
+        verify(updateCourt, never()).updateCourt(any());
+    }
+
+    /**
+     * Regression: the API used to trust X-User-Id / X-User-Role, and its port is published on the
+     * host, so anyone could change a price by sending those two headers.
+     */
+    @Test
+    void spoofedIdentityHeadersAreIgnored() throws Exception {
+        mvc.perform(patch(URL).contentType(MediaType.APPLICATION_JSON).content("{\"hourlyPrice\": {\"amount\": 1000, \"currency\": \"COP\"}}")
+                        .header("X-User-Id", "attacker").header("X-User-Role", "ADMINISTRATOR"))
+                .andExpect(status().isUnauthorized());
+        // A real customer-role token plus a spoofed administrator header is still forbidden.
+        mvc.perform(withToken(TestTokens.withRole("user-2", "CUSTOMER")).header("X-User-Role", "ADMINISTRATOR"))
+                .andExpect(status().isForbidden());
+        verify(updateCourt, never()).updateCourt(any());
+    }
+
+    @Test
+    void expiredForeignOrForgedTokensAre401() throws Exception {
+        for (String token : new String[] {
+                TestTokens.expired(ADMIN_ID),
+                TestTokens.fromIssuer(ADMIN_ID, "someone-else"),
+                TestTokens.signedByAnotherKey(ADMIN_ID),
+                "not-a-jwt"}) {
+            mvc.perform(withToken(token))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.error").value("UNAUTHORIZED"));
+        }
         mvc.perform(patch(URL).contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"INACTIVE\"}")
-                        .header("X-User-Role", "ADMINISTRATOR"))
+                        .header("Authorization", "Basic YWRtaW46YWRtaW4="))
                 .andExpect(status().isUnauthorized());
         verify(updateCourt, never()).updateCourt(any());
     }

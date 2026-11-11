@@ -24,7 +24,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = {CourtController.class, AdminCourtController.class})
-@Import({ApiExceptionHandler.class, CorrelationIdFilter.class, AdministratorInterceptor.class, WebConfiguration.class})
+@Import({ApiExceptionHandler.class, CorrelationIdFilter.class, AdministratorInterceptor.class, WebConfiguration.class,
+        TestVerifierConfiguration.class})
 class CourtControllerTest {
 
     static final UUID COURT_1 = UUID.fromString("c0000000-0000-4000-8000-000000000001");

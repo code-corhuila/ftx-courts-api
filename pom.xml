@@ -19,6 +19,7 @@
 
   <properties>
     <java.version>21</java.version>
+    <nimbus-jose-jwt.version>9.37.3</nimbus-jose-jwt.version>
     <!-- Folder of the sibling ftx-courts-db clone; the integration test runs its real migrations. -->
     <courts.db.dir>${project.basedir}/../ftx-courts-db</courts.db.dir>
   </properties>
@@ -39,6 +40,13 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Checks the administrator JWT against the JWKS of ftx-customers-api. Not in the Spring Boot
+         BOM: exact version pinned (security-rules.md A06), the same one ftx-customers-api uses. -->
+    <dependency>
+      <groupId>com.nimbusds</groupId>
+      <artifactId>nimbus-jose-jwt</artifactId>
+      <version>${nimbus-jose-jwt.version}</version>
     </dependency>
     <dependency>
       <groupId>org.postgresql</groupId>

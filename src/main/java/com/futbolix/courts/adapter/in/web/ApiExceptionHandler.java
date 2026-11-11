@@ -66,6 +66,13 @@ public class ApiExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", "Administrator authorization is required", List.of());
     }
 
+    /** The keys to check the token cannot be fetched: refuse, never let the request through. */
+    @ExceptionHandler(AdministratorTokenVerifier.KeysUnavailableException.class)
+    ResponseEntity<ErrorResponse> keysUnavailable(AdministratorTokenVerifier.KeysUnavailableException e) {
+        log.warn("Administrator token keys unavailable: {}", e.getCause() == null ? "-" : e.getCause().getClass().getSimpleName());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", "The service is temporarily unavailable", List.of());
+    }
+
     @ExceptionHandler({CourtNotFoundException.class, NoResourceFoundException.class})
     ResponseEntity<ErrorResponse> notFound() {
         return error(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested resource was not found", List.of());
