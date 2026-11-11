@@ -24,5 +24,7 @@ services:
 
 networks:
   platform:
-    name: platform
+    # One network per environment (PLATFORM_NETWORK in the env file of ftx-infra-postgres), so the
+    # names postgres and ftx-*-api never resolve to a container of another environment.
+    name: ${PLATFORM_NETWORK:-platform}
     external: true
