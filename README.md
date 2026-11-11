@@ -14,6 +14,7 @@ Contract: `ftx-docs/07-api/contracts/openapi/court-service.yaml`.
 | `GET /api/v1/courts` | Public | 200 `{ "data": [Court] }` |
 | `GET /api/v1/courts/{id}` | Public | 200 `Court`, 400 bad id, 404 |
 | `PATCH /api/v1/admin/courts/{id}` | `ADMINISTRATOR` | 200 `Court`, 400 invalid or unknown field, 401 no identity, 403 other role, 404, 409 name in use, 422 `INVALID_COURT_STATUS_TRANSITION` |
+| `GET /api/v1/health` | Public | 200 `{ "status": "ok", "timestamp", "dependencies": { "database": "ok" } }` (contract); 503 |
 | `GET /health`, `/health/liveness`, `/health/readiness` | Probes | 200 `UP` |
 
 Courts are never created or deleted (BR-001): there are no POST or DELETE endpoints, and the
