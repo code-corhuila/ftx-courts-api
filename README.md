@@ -24,11 +24,17 @@ belong to `ftx-schedules-api`.
 
 ### Who can change a court
 
-The API Gateway validates the administrator JWT and overwrites `X-User-Id` and `X-User-Role`
-(`ftx-docs/07-api/authentication.md`). This service is reachable only inside the `platform`
-network and refuses `/api/v1/admin/**` without those headers (401) or with a role other than
-`ADMINISTRATOR` (403). Every change is logged on the `audit` logger with the administrator id and
-the values before and after (FR-036).
+`/api/v1/admin/**` needs the administrator access token in `Authorization: Bearer <token>`, and
+this service **checks it itself**: RS256, signed by a key of the JWKS that `ftx-customers-api`
+publishes (`GET /api/v1/auth/jwks`), issuer `ftx-customers-api`, not expired, with `sub`, `iat`,
+`exp`, `jti` and `roles`. No valid token: 401. A role other than `ADMINISTRATOR`: 403. The keys
+cannot be fetched: 503, and nothing is changed. Public reads never need the keys.
+
+`X-User-Id` and `X-User-Role` are **ignored**. The port of this API is published on the host, so
+a client could send those headers, and `ftx-docs/07-api/authentication.md` says a service must
+never trust client-supplied identity headers. The gateway forwards the `Authorization` header
+unchanged. Every change is logged on the `audit` logger with the administrator id (the `sub` of the
+token) and the values before and after (FR-036).
 
 ## Architecture (hexagonal)
 
@@ -50,6 +56,8 @@ adapter/config/          wiring; an update runs in one transaction
 | `COURTS_DB_URL` | `jdbc:postgresql://postgres:5432/ftx` | The single instance of `ftx-infra-postgres` |
 | `COURTS_DB_USER` | `courts_app` | Login user created by `ftx-infra-postgres` |
 | `COURTS_DB_PASSWORD` | none (required) | Its password, from `env/<environment>.env` of `ftx-infra-postgres` |
+| `COURTS_AUTH_JWKS_URL` | `http://ftx-customers-api:8081/api/v1/auth/jwks` | Public keys of the administrator tokens (cached by the service) |
+| `COURTS_AUTH_ISSUER` | `ftx-customers-api` | Required `iss` of the tokens |
 | `PORT` | `8082` | HTTP port |
 
 The service never runs migrations: the `courts` schema belongs to `ftx-courts-db`. Logs are JSON
@@ -79,7 +87,9 @@ mvn verify
 ```
 
 - Unit tests of the domain and the use cases, and web tests of every response of the contract,
-  including a request from a non-administrator that must be refused.
+  including a request from a non-administrator that must be refused, spoofed `X-User-*` headers,
+  expired, foreign and forged tokens, and the keys being unavailable. The tests sign tokens with
+  a key made for each run.
 - Integration tests against a real PostgreSQL with the **real migrations** of the sibling
   `ftx-courts-db` clone (`-Dcourts.db.dir=...`, default `../ftx-courts-db`), connected as
   `courts_app` with only the rights `ftx-courts-db` grants it. The database is a Testcontainers
