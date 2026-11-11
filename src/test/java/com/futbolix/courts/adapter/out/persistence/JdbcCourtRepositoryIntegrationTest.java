@@ -143,10 +143,12 @@ public class JdbcCourtRepositoryIntegrationTest {
         assertThatThrownBy(() -> app.sql(
                 "INSERT INTO courts.court (name, capacity, hourly_price) VALUES ('Cancha 5', 10, 60000)").update())
                 .isInstanceOf(DataAccessException.class)
-                .rootCause().hasMessageContaining("permission denied for table court");
+                .rootCause().isInstanceOf(java.sql.SQLException.class)
+                .extracting(e -> ((java.sql.SQLException) e).getSQLState()).isEqualTo("42501"); // insufficient_privilege, any server language
         assertThatThrownBy(() -> app.sql("DELETE FROM courts.court").update())
                 .isInstanceOf(DataAccessException.class)
-                .rootCause().hasMessageContaining("permission denied for table court");
+                .rootCause().isInstanceOf(java.sql.SQLException.class)
+                .extracting(e -> ((java.sql.SQLException) e).getSQLState()).isEqualTo("42501"); // insufficient_privilege, any server language
         assertThat(admin.sql("SELECT count(*) FROM courts.court").query(Long.class).single()).isEqualTo(4L);
     }
 }
