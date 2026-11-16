@@ -45,7 +45,7 @@ application/             CourtService (use cases) and its ports
   port/in/               ListCourts, GetCourt, UpdateCourt
   port/out/              CourtRepository, CourtAuditTrail
 adapter/in/web/          controllers, ErrorResponse, administrator guard, correlation id
-adapter/out/persistence/ JdbcCourtRepository (Spring JDBC on courts.court)
+adapter/out/persistence/ JdbcCourtRepository (Spring JDBC on courts.courts)
 adapter/out/audit/       structured audit log
 adapter/config/          wiring; an update runs in one transaction
 ```
