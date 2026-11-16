@@ -17,8 +17,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * courts.court of ftx-courts-db. Connects as courts_app, which can only SELECT and UPDATE:
- * this adapter never inserts or deletes (BR-001).
+ * courts.courts of ftx-courts-db (table created by its V002). Connects as courts_app. This adapter
+ * only reads and updates: it never inserts or deletes a court (BR-001), whatever the grants are.
  */
 @Repository
 public class JdbcCourtRepository implements CourtRepository {
@@ -34,12 +34,12 @@ public class JdbcCourtRepository implements CourtRepository {
 
     @Override
     public List<Court> findAll() {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM courts.court").query(JdbcCourtRepository::toCourt).list();
+        return jdbc.sql("SELECT " + COLUMNS + " FROM courts.courts").query(JdbcCourtRepository::toCourt).list();
     }
 
     @Override
     public Optional<Court> findById(UUID courtId) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM courts.court WHERE id = :id")
+        return jdbc.sql("SELECT " + COLUMNS + " FROM courts.courts WHERE id = :id")
                 .param("id", courtId)
                 .query(JdbcCourtRepository::toCourt)
                 .optional();
@@ -47,7 +47,7 @@ public class JdbcCourtRepository implements CourtRepository {
 
     @Override
     public boolean isNameTakenByAnotherCourt(String name, UUID courtId) {
-        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM courts.court WHERE lower(name) = lower(:name) AND id <> :id)")
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM courts.courts WHERE lower(name) = lower(:name) AND id <> :id)")
                 .param("name", name)
                 .param("id", courtId)
                 .query(Boolean.class)
@@ -58,8 +58,9 @@ public class JdbcCourtRepository implements CourtRepository {
     public Court update(Court court) {
         try {
             return jdbc.sql("""
-                    UPDATE courts.court
-                       SET name = :name, capacity = :capacity, hourly_price = :price, status = :status
+                    UPDATE courts.courts
+                       SET name = :name, capacity = :capacity, hourly_price = :price, status = :status,
+                           updated_at = now()
                      WHERE id = :id
                     RETURNING """ + " " + COLUMNS)
                     .param("name", court.name())
@@ -71,7 +72,7 @@ public class JdbcCourtRepository implements CourtRepository {
                     .single();
         } catch (DuplicateKeyException e) {
             // Two administrators renamed two courts to the same name at the same time:
-            // idx_court_name_lower is the last guard.
+            // the unique constraint on the name is the last guard.
             throw new CourtNameTakenException(court.name());
         }
     }
