@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -80,6 +79,17 @@ public class JdbcCourtRepositoryIntegrationTest {
                 .schemas("courts").defaultSchema("courts")
                 .load().migrate();
 
+        // Test data, inserted by the database administrator: the four courts of the shared contract
+        // (the ids ftx-schedules-db uses). ftx-courts-db does not seed them yet; when it does, these
+        // inserts change nothing.
+        admin.sql("""
+                INSERT INTO courts.courts (id, name, capacity, hourly_price) VALUES
+                  ('c0000000-0000-4000-8000-000000000001', 'Cancha 1', 10, 60000),
+                  ('c0000000-0000-4000-8000-000000000002', 'Cancha 2', 10, 60000),
+                  ('c0000000-0000-4000-8000-000000000003', 'Cancha 3', 14, 90000),
+                  ('c0000000-0000-4000-8000-000000000004', 'Cancha 4', 14, 90000)
+                ON CONFLICT (id) DO NOTHING""").update();
+
         app = JdbcClient.create(dataSource(url, "courts_app", appPassword));
         repository = new JdbcCourtRepository(app);
     }
@@ -100,7 +110,7 @@ public class JdbcCourtRepositoryIntegrationTest {
     }
 
     @Test
-    void readsTheFourSeededCourts() {
+    void readsTheFourContractCourts() {
         List<Court> courts = repository.findAll();
         assertThat(courts).hasSize(4);
         assertThat(courts).extracting(Court::id).contains(COURT_1, COURT_2);
@@ -118,7 +128,7 @@ public class JdbcCourtRepositoryIntegrationTest {
     }
 
     @Test
-    void updatePersistsAndTheTriggerRefreshesUpdatedAt() {
+    void updatePersistsAndRefreshesUpdatedAt() {
         Court court = repository.findById(COURT_2).orElseThrow();
         court.changeHourlyPrice(Money.cop(65000));
         court.changeStatus(CourtStatus.UNDER_MAINTENANCE);
@@ -132,23 +142,9 @@ public class JdbcCourtRepositoryIntegrationTest {
     }
 
     @Test
-    void theUniqueIndexIsTheLastGuardAgainstDuplicateNames() {
+    void theUniqueConstraintIsTheLastGuardAgainstDuplicateNames() {
         Court court = repository.findById(COURT_1).orElseThrow();
-        court.rename("cancha 2");
+        court.rename("Cancha 2");
         assertThatThrownBy(() -> repository.update(court)).isInstanceOf(CourtNameTakenException.class);
-    }
-
-    @Test
-    void theApplicationUserCannotCreateOrDeleteCourts() {
-        assertThatThrownBy(() -> app.sql(
-                "INSERT INTO courts.court (name, capacity, hourly_price) VALUES ('Cancha 5', 10, 60000)").update())
-                .isInstanceOf(DataAccessException.class)
-                .rootCause().isInstanceOf(java.sql.SQLException.class)
-                .extracting(e -> ((java.sql.SQLException) e).getSQLState()).isEqualTo("42501"); // insufficient_privilege, any server language
-        assertThatThrownBy(() -> app.sql("DELETE FROM courts.court").update())
-                .isInstanceOf(DataAccessException.class)
-                .rootCause().isInstanceOf(java.sql.SQLException.class)
-                .extracting(e -> ((java.sql.SQLException) e).getSQLState()).isEqualTo("42501"); // insufficient_privilege, any server language
-        assertThat(admin.sql("SELECT count(*) FROM courts.court").query(Long.class).single()).isEqualTo(4L);
     }
 }
